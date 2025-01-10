@@ -11,6 +11,9 @@ export function Scene() {
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const pointsRef = useRef<THREE.Points | null>(null);
   const frameIdRef = useRef<number>(0);
+  const mouseRef = useRef({ x: 0, y: 0 });
+  const targetRotationRef = useRef({ x: 0, y: 0 });
+  const currentRotationRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -21,12 +24,12 @@ export function Scene() {
 
     // Setup camera
     const camera = new THREE.PerspectiveCamera(
-      45,
+      60,
       window.innerWidth / window.innerHeight,
       0.1,
       1000
     );
-    camera.position.set(0, 5, 15);
+    camera.position.set(0, 3, 10);
     cameraRef.current = camera;
 
     // Setup renderer
@@ -44,27 +47,38 @@ export function Scene() {
     const cols = 200;
     const geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(rows * cols * 3);
+    const colors = new Float32Array(rows * cols * 3);
     const spacing = 0.1;
 
+    const color = new THREE.Color("#186ebc");
     let i = 0;
     for (let x = 0; x < cols; x++) {
       for (let z = 0; z < rows; z++) {
         positions[i] = (x - cols / 2) * spacing;
         positions[i + 1] = 0;
         positions[i + 2] = (z - rows / 2) * spacing;
+
+        // Add color variation based on position
+        const intensity = 0.5 + Math.random() * 0.5;
+        colors[i] = color.r * intensity;
+        colors[i + 1] = color.g * intensity;
+        colors[i + 2] = color.b * intensity;
+
         i += 3;
       }
     }
 
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
     // Create points material
     const material = new THREE.PointsMaterial({
-      color: "#186ebc",
-      size: 0.008,
+      size: 0.015,
       transparent: true,
       opacity: 0.8,
+      vertexColors: true,
       blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
     });
 
     // Create points mesh
@@ -84,7 +98,7 @@ export function Scene() {
 
       const positions = pointsRef.current.geometry.attributes.position
         .array as Float32Array;
-      const time = Date.now() * 0.001;
+      const time = Date.now() * 0.002; // Increased speed
 
       let i = 0;
       for (let x = 0; x < cols; x++) {
@@ -92,19 +106,37 @@ export function Scene() {
           const xPos = positions[i];
           const zPos = positions[i + 2];
 
+          // More dramatic mountain-like wave pattern
           positions[i + 1] =
-            Math.sin(xPos * 0.5 + time * 0.3) * 0.2 +
-            Math.sin(zPos * 0.5 + time * 0.2) * 0.2 +
-            Math.sin(Math.sqrt(xPos * xPos + zPos * zPos) * 0.3 + time * 0.4) *
-              0.2;
+            Math.sin(xPos * 0.5 + time * 2) * 0.5 + // Increased amplitude and speed
+            Math.sin(zPos * 0.5 + time * 1.5) * 0.5 +
+            Math.sin(Math.sqrt(xPos * xPos + zPos * zPos) * 0.3 + time) * 1;
 
           i += 3;
         }
       }
 
+      // Smooth rotation interpolation
+      currentRotationRef.current.x +=
+        (targetRotationRef.current.x - currentRotationRef.current.x) * 0.05;
+      currentRotationRef.current.y +=
+        (targetRotationRef.current.y - currentRotationRef.current.y) * 0.05;
+
+      pointsRef.current.rotation.x = currentRotationRef.current.x;
+      pointsRef.current.rotation.y = currentRotationRef.current.y;
+
       pointsRef.current.geometry.attributes.position.needsUpdate = true;
       rendererRef.current.render(sceneRef.current, cameraRef.current);
       frameIdRef.current = requestAnimationFrame(animate);
+    };
+
+    // Handle mouse movement
+    const handleMouseMove = (event: MouseEvent) => {
+      mouseRef.current.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouseRef.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      targetRotationRef.current.x = mouseRef.current.y * 0.3;
+      targetRotationRef.current.y = mouseRef.current.x * 0.3;
     };
 
     // Handle resize
@@ -119,11 +151,13 @@ export function Scene() {
       rendererRef.current.setSize(width, height);
     };
 
+    window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("resize", handleResize);
     animate();
 
     // Cleanup
     return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("resize", handleResize);
       if (frameIdRef.current) {
         cancelAnimationFrame(frameIdRef.current);
@@ -148,7 +182,7 @@ export function Scene() {
         width: "100%",
         height: "100vh",
         zIndex: 0,
-        pointerEvents: "none",
+        cursor: "default",
       }}
     />
   );
